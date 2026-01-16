@@ -1,8 +1,46 @@
 """Command-line interface for the data agent."""
 
 import click
+from rich.console import Console
+from rich.panel import Panel
+from rich.progress import Progress, BarColumn, TextColumn
+from rich.markdown import Markdown
+from rich.table import Table
+from rich.text import Text
 from .agent import Agent
 from .db import get_default_warehouse
+
+console = Console()
+
+BANNER = """
+██████╗  █████╗ ████████╗ █████╗      █████╗  ██████╗ ███████╗███╗   ██╗████████╗
+██╔══██╗██╔══██╗╚══██╔══╝██╔══██╗    ██╔══██╗██╔════╝ ██╔════╝████╗  ██║╚══██╔══╝
+██║  ██║███████║   ██║   ███████║    ███████║██║  ███╗█████╗  ██╔██╗ ██║   ██║   
+██║  ██║██╔══██║   ██║   ██╔══██║    ██╔══██║██║   ██║██╔══╝  ██║╚██╗██║   ██║   
+██████╔╝██║  ██║   ██║   ██║  ██║    ██║  ██║╚██████╔╝███████╗██║ ╚████║   ██║   
+╚═════╝ ╚═╝  ╚═╝   ╚═╝   ╚═╝  ╚═╝    ╚═╝  ╚═╝ ╚═════╝ ╚══════╝╚═╝  ╚═══╝   ╚═╝   
+"""
+
+
+def show_banner():
+    """Display the welcome banner."""
+    console.print(Text(BANNER, style="bold magenta"))
+    console.print("  [dim]Ad-hoc analytics powered by AI[/dim]\n")
+
+
+def show_loading(task_name: str = "Thinking"):
+    """Show a loading bar animation."""
+    with Progress(
+        TextColumn("[bold magenta]{task.description}"),
+        BarColumn(bar_width=40, style="magenta", complete_style="bold magenta"),
+        console=console,
+        transient=True,
+    ) as progress:
+        task = progress.add_task(task_name, total=100)
+        while not progress.finished:
+            progress.update(task, advance=2)
+            import time
+            time.sleep(0.02)
 
 
 @click.group()
@@ -14,8 +52,11 @@ def cli():
 @cli.command()
 def schema():
     """Show the warehouse schema."""
+    show_banner()
     warehouse = get_default_warehouse()
-    click.echo(warehouse.get_schema_summary(["raw", "staging", "marts"]))
+    console.print(Panel(warehouse.get_schema_summary(["raw", "staging", "marts"]), 
+                        title="[bold]Database Schema[/bold]", 
+                        border_style="magenta"))
     warehouse.close()
 
 
@@ -28,9 +69,14 @@ def ask(question: str):
         agent ask "How much revenue did we do last quarter?"
         agent ask "What are the top 5 products by sales?"
     """
+    show_banner()
+    console.print(f"[bold]Question:[/bold] {question}\n")
+    
     agent = Agent()
+    show_loading("Analyzing")
     response = agent.chat(question)
-    click.echo(response)
+    
+    console.print(Panel(Markdown(response), title="[bold]Answer[/bold]", border_style="green"))
 
 
 @cli.command()
@@ -41,24 +87,30 @@ def sql(question: str):
     Examples:
         agent sql "Show me monthly revenue trends"
     """
+    show_banner()
+    console.print(f"[bold]Question:[/bold] {question}\n")
+    
     agent = Agent()
+    show_loading("Generating SQL")
     sql_query = agent.generate_sql(question)
-    click.echo(sql_query)
+    
+    console.print(Panel(sql_query, title="[bold]Generated SQL[/bold]", border_style="yellow"))
 
 
 @cli.command()
 def repl():
     """Start an interactive session."""
-    click.echo("Data Agent REPL (type 'exit' to quit, 'schema' to see tables)")
-    click.echo("-" * 50)
+    show_banner()
+    console.print("[dim]Type your questions below. Commands: 'exit' to quit, 'schema' to see tables[/dim]")
+    console.print("─" * 60 + "\n")
     
     agent = Agent()
     
     while True:
         try:
-            question = click.prompt("\nYou", prompt_suffix="> ")
+            question = console.input("[bold magenta]You >[/bold magenta] ")
         except (EOFError, KeyboardInterrupt):
-            click.echo("\nGoodbye!")
+            console.print("\n[dim]Goodbye![/dim]")
             break
         
         question = question.strip()
@@ -66,15 +118,17 @@ def repl():
         if not question:
             continue
         if question.lower() in ("exit", "quit", "q"):
-            click.echo("Goodbye!")
+            console.print("[dim]Goodbye![/dim]")
             break
         if question.lower() == "schema":
-            click.echo(agent.schema_summary)
+            console.print(Panel(agent.schema_summary, title="[bold]Schema[/bold]", border_style="magenta"))
             continue
         
-        click.echo("\nThinking...\n")
+        show_loading("Analyzing")
         response = agent.chat(question)
-        click.echo(response)
+        console.print()
+        console.print(Panel(Markdown(response), title="[bold]Answer[/bold]", border_style="green"))
+        console.print()
 
 
 def main():
