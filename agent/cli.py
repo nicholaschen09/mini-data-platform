@@ -24,15 +24,15 @@ BANNER = """
 
 def show_banner():
     """Display the welcome banner."""
-    console.print(Text(BANNER, style="bold purple4"))
+    console.print(Text(BANNER, style="bold medium_purple"))
     console.print("  [dim]Ad-hoc analytics powered by AI[/dim]\n")
 
 
 def show_loading(task_name: str = "Thinking"):
     """Show a loading bar animation."""
     with Progress(
-        TextColumn("[bold purple4]{task.description}"),
-        BarColumn(bar_width=40, style="purple4", complete_style="bold purple4"),
+        TextColumn("[bold medium_purple]{task.description}"),
+        BarColumn(bar_width=40, style="medium_purple", complete_style="bold medium_purple"),
         console=console,
         transient=True,
     ) as progress:
@@ -56,7 +56,7 @@ def schema():
     warehouse = get_default_warehouse()
     console.print(Panel(warehouse.get_schema_summary(["raw", "staging", "marts"]), 
                         title="[bold]Database Schema[/bold]", 
-                        border_style="purple4"))
+                        border_style="medium_purple"))
     warehouse.close()
 
 
@@ -108,7 +108,7 @@ def repl():
     
     while True:
         try:
-            question = console.input("[bold purple4]You >[/bold purple4] ")
+            question = console.input("[bold medium_purple]You >[/bold medium_purple] ")
         except (EOFError, KeyboardInterrupt):
             console.print("\n[dim]Goodbye![/dim]")
             break
