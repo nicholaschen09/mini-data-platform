@@ -3,9 +3,7 @@
 import click
 from rich.console import Console
 from rich.panel import Panel
-from rich.progress import Progress, BarColumn, TextColumn
 from rich.markdown import Markdown
-from rich.table import Table
 from rich.text import Text
 from .agent import Agent
 from .db import get_default_warehouse
@@ -29,18 +27,44 @@ def show_banner():
 
 
 def show_loading(task_name: str = "Thinking"):
-    """Show a loading bar animation."""
-    with Progress(
-        TextColumn("[bold medium_purple]{task.description}"),
-        BarColumn(bar_width=40, style="medium_purple", complete_style="bold medium_purple"),
-        console=console,
-        transient=True,
-    ) as progress:
-        task = progress.add_task(task_name, total=100)
-        while not progress.finished:
-            progress.update(task, advance=2)
-            import time
+    """Show a staggered multi-bar loading animation."""
+    import time
+    import shutil
+    
+    term_width = min(shutil.get_terminal_size().columns, 60)
+    num_bars = 8
+    bar_char = "━"
+    
+    # Hide cursor
+    console.print("\033[?25l", end="")
+    
+    try:
+        for frame in range(term_width + 10):
+            lines = []
+            for i in range(num_bars):
+                # Stagger each bar
+                offset = i * 3
+                fill = max(0, min(frame - offset, term_width - 10))
+                bar = f"[medium_purple]{bar_char * fill}[/medium_purple]"
+                lines.append(bar)
+            
+            # Move cursor up and redraw
+            if frame > 0:
+                console.print(f"\033[{num_bars}A", end="")
+            
+            for line in lines:
+                console.print(line)
+            
             time.sleep(0.02)
+        
+        # Clear the animation
+        console.print(f"\033[{num_bars}A", end="")
+        for _ in range(num_bars):
+            console.print(" " * term_width)
+        console.print(f"\033[{num_bars}A", end="")
+    finally:
+        # Show cursor
+        console.print("\033[?25h", end="")
 
 
 @click.group(invoke_without_command=True)
