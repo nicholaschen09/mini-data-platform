@@ -1,4 +1,4 @@
-# Solution
+# solution
 
 for this takehome i was tasked to build a CLI agent that can answer ad-hoc questions about a data warehouse using natural language.
 
