@@ -36,6 +36,8 @@ FIX_SQL_PROMPT = """The SQL query you generated failed with this error:
 
 Error: {error}
 
+{hint}
+
 Original question: {question}
 
 Failed SQL:
@@ -44,6 +46,24 @@ Failed SQL:
 ```
 
 Please fix the SQL query. Return ONLY the corrected SQL, no explanation."""
+
+
+def _get_error_hint(error: str) -> str:
+    """Get a helpful hint based on the error type."""
+    error_lower = error.lower()
+    
+    if "column" in error_lower and "not found" in error_lower:
+        return "Hint: Check that all column names exist in the schema. Use the exact column names."
+    elif "table" in error_lower and ("not found" in error_lower or "does not exist" in error_lower):
+        return "Hint: Use fully qualified table names like marts.fct_orders, marts.dim_customers."
+    elif "syntax" in error_lower:
+        return "Hint: Check SQL syntax. DuckDB uses standard SQL."
+    elif "type" in error_lower and ("mismatch" in error_lower or "cannot" in error_lower):
+        return "Hint: Check data types. You may need to cast values."
+    elif "ambiguous" in error_lower:
+        return "Hint: Qualify ambiguous column names with table aliases."
+    else:
+        return "Hint: Review the schema and ensure the query matches the available tables and columns."
 
 
 class Agent:
@@ -83,7 +103,8 @@ class Agent:
 
     def _fix_sql(self, question: str, sql: str, error: str) -> str:
         """Ask the LLM to fix a failed SQL query."""
-        prompt = FIX_SQL_PROMPT.format(question=question, sql=sql, error=error)
+        hint = _get_error_hint(error)
+        prompt = FIX_SQL_PROMPT.format(question=question, sql=sql, error=error, hint=hint)
         fixed_sql = self.llm.complete(self._get_system_prompt(), prompt)
         return self._clean_sql(fixed_sql)
 
