@@ -28,25 +28,18 @@ def show_banner():
 
 def show_loading():
     """Show a simple horizontal loading bar."""
+    from rich.progress import Progress, BarColumn
     import time
-    import shutil
     
-    bar_width = min(shutil.get_terminal_size().columns - 4, 50)
-    bar_char = "━"
-    
-    # Hide cursor
-    console.print("\033[?25l", end="")
-    
-    try:
-        for fill in range(bar_width + 1):
-            remaining = bar_width - fill
-            bar = f"[medium_purple]{bar_char * fill}[/medium_purple][dim]{bar_char * remaining}[/dim]"
-            console.print(f"\r{bar}", end="")
+    with Progress(
+        BarColumn(bar_width=50, style="dim white", complete_style="medium_purple", finished_style="medium_purple"),
+        console=console,
+        transient=True,
+    ) as progress:
+        task = progress.add_task("", total=100)
+        while not progress.finished:
+            progress.update(task, advance=4)
             time.sleep(0.02)
-        console.print()  # newline after done
-    finally:
-        # Show cursor
-        console.print("\033[?25h", end="")
 
 
 @click.group(invoke_without_command=True)
