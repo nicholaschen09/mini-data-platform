@@ -9,6 +9,11 @@ venv/
 ENV/
 *.egg-info/
 
+# Environment
+.env
+.env.local
+.env.*.local
+
 # Airflow
 airflow/airflow.db
 airflow/airflow.db-shm
