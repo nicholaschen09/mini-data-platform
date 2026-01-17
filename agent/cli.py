@@ -79,7 +79,7 @@ def ask(question: str):
     show_loading("Analyzing")
     response = agent.chat(question)
     
-    console.print(Panel(Markdown(response), title="[bold]Answer[/bold]", border_style="green"))
+    console.print(Panel(Markdown(response), title="[bold]Answer[/bold]", border_style="medium_purple"))
 
 
 @cli.command()
@@ -97,7 +97,7 @@ def sql(question: str):
     show_loading("Generating SQL")
     sql_query = agent.generate_sql(question)
     
-    console.print(Panel(sql_query, title="[bold]Generated SQL[/bold]", border_style="yellow"))
+    console.print(Panel(sql_query, title="[bold]Generated SQL[/bold]", border_style="medium_purple"))
 
 
 def run_repl():
@@ -134,7 +134,7 @@ def run_repl():
         show_loading("Analyzing")
         response = agent.chat(question)
         console.print()
-        console.print(Panel(Markdown(response), title="[bold]Answer[/bold]", border_style="green"))
+        console.print(Panel(Markdown(response), title="[bold]Answer[/bold]", border_style="medium_purple"))
         console.print()
 
 
