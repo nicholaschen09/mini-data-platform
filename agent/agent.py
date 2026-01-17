@@ -32,13 +32,27 @@ TIPS:
 - Revenue is in the 'total' column, quantity sold is in 'quantity'
 """
 
+FIX_SQL_PROMPT = """The SQL query you generated failed with this error:
+
+Error: {error}
+
+Original question: {question}
+
+Failed SQL:
+```sql
+{sql}
+```
+
+Please fix the SQL query. Return ONLY the corrected SQL, no explanation."""
+
 
 class Agent:
     """Text-to-SQL agent using configurable LLM provider."""
 
-    def __init__(self, warehouse: Warehouse | None = None, llm: LLMProvider | None = None):
+    def __init__(self, warehouse: Warehouse | None = None, llm: LLMProvider | None = None, max_retries: int = 2):
         self.warehouse = warehouse or get_default_warehouse()
         self.llm = llm or get_llm_provider()
+        self.max_retries = max_retries
         self._schema_cache: str | None = None
 
     @property
@@ -50,44 +64,77 @@ class Agent:
     def _get_system_prompt(self) -> str:
         return SYSTEM_PROMPT.format(schema=self.schema_summary)
 
-    def generate_sql(self, question: str) -> str:
-        """Convert a natural language question to SQL."""
-        return self.llm.complete(self._get_system_prompt(), question)
-
-    def query(self, question: str) -> dict:
-        """Answer a question: generate SQL, execute, return results."""
-        # Generate SQL
-        sql = self.generate_sql(question)
-        
-        # Clean up SQL (remove markdown code blocks if present)
+    def _clean_sql(self, sql: str) -> str:
+        """Remove markdown code blocks and clean up SQL."""
+        sql = sql.strip()
         if sql.startswith("```"):
             lines = sql.split("\n")
-            sql = "\n".join(lines[1:-1] if lines[-1] == "```" else lines[1:])
-        sql = sql.strip()
+            # Remove first line (```sql) and last line (```)
+            if lines[-1].strip() == "```":
+                sql = "\n".join(lines[1:-1])
+            else:
+                sql = "\n".join(lines[1:])
+        return sql.strip()
+
+    def generate_sql(self, question: str) -> str:
+        """Convert a natural language question to SQL."""
+        sql = self.llm.complete(self._get_system_prompt(), question)
+        return self._clean_sql(sql)
+
+    def _fix_sql(self, question: str, sql: str, error: str) -> str:
+        """Ask the LLM to fix a failed SQL query."""
+        prompt = FIX_SQL_PROMPT.format(question=question, sql=sql, error=error)
+        fixed_sql = self.llm.complete(self._get_system_prompt(), prompt)
+        return self._clean_sql(fixed_sql)
+
+    def query(self, question: str) -> dict:
+        """Answer a question: generate SQL, execute, return results with retry on error."""
+        sql = self.generate_sql(question)
+        last_error = None
         
-        # Execute
-        try:
-            results = self.warehouse.execute_df(sql)
-            return {
-                "question": question,
-                "sql": sql,
-                "results": results,
-                "error": None
-            }
-        except Exception as e:
-            return {
-                "question": question,
-                "sql": sql,
-                "results": None,
-                "error": str(e)
-            }
+        for attempt in range(self.max_retries + 1):
+            try:
+                results = self.warehouse.execute_df(sql)
+                return {
+                    "question": question,
+                    "sql": sql,
+                    "results": results,
+                    "error": None,
+                    "retries": attempt
+                }
+            except Exception as e:
+                last_error = str(e)
+                
+                if attempt < self.max_retries:
+                    # Try to fix the SQL
+                    sql = self._fix_sql(question, sql, last_error)
+                else:
+                    # Out of retries
+                    return {
+                        "question": question,
+                        "sql": sql,
+                        "results": None,
+                        "error": last_error,
+                        "retries": attempt
+                    }
+        
+        # Should never reach here, but just in case
+        return {
+            "question": question,
+            "sql": sql,
+            "results": None,
+            "error": last_error,
+            "retries": self.max_retries
+        }
 
     def chat(self, question: str) -> str:
         """Full conversational response to a question."""
         result = self.query(question)
         
         if result["error"]:
-            return f"I tried this SQL:\n```sql\n{result['sql']}\n```\n\nBut got an error: {result['error']}"
+            retries = result.get("retries", 0)
+            retry_msg = f" (tried {retries + 1} times)" if retries > 0 else ""
+            return f"I tried this SQL{retry_msg}:\n```sql\n{result['sql']}\n```\n\nBut got an error: {result['error']}\n\nTry rephrasing your question or ask for something simpler."
         
         # Format results nicely
         if not result["results"]:
