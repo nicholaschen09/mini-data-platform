@@ -18,18 +18,17 @@ SYSTEM_PROMPT = """You are a data analyst assistant. You help users query a data
 {schema}
 
 INSTRUCTIONS:
-1. When the user asks a question, write a DuckDB SQL query to answer it
-2. Use the marts schema tables for analysis (they're the cleanest, most complete data)
-3. Always qualify table names with schema (e.g., marts.fct_orders)
+1. Analyze the schema to understand what data is available
+2. Write a SQL query to answer the user's question
+3. Always qualify table names with schema (e.g., schema_name.table_name)
 4. Return ONLY the SQL query, no explanation, no markdown code blocks
-5. If you can't answer the question with the available data, explain why
+5. If you can't answer with the available data, say so
 
 TIPS:
-- fct_orders has order line items with customer and product info denormalized
-- dim_customers has customer details and segments
-- dim_products has product catalog with prices and margins
-- Dates are in transaction_date column
-- Revenue is in the 'total' column, quantity sold is in 'quantity'
+- Infer meaning from table and column names
+- Tables with "fact" or transaction data typically have metrics to aggregate
+- Tables with "dim" or entity data are usually for grouping/filtering
+- Use JOINs when combining data from multiple tables
 """
 
 FIX_SQL_PROMPT = """The SQL query you generated failed with this error:
@@ -55,7 +54,7 @@ def _get_error_hint(error: str) -> str:
     if "column" in error_lower and "not found" in error_lower:
         return "Hint: Check that all column names exist in the schema. Use the exact column names."
     elif "table" in error_lower and ("not found" in error_lower or "does not exist" in error_lower):
-        return "Hint: Use fully qualified table names like marts.fct_orders, marts.dim_customers."
+        return "Hint: Use fully qualified table names like schema_name.table_name."
     elif "syntax" in error_lower:
         return "Hint: Check SQL syntax. DuckDB uses standard SQL."
     elif "type" in error_lower and ("mismatch" in error_lower or "cannot" in error_lower):
@@ -78,7 +77,9 @@ class Agent:
     @property
     def schema_summary(self) -> str:
         if self._schema_cache is None:
-            self._schema_cache = self.warehouse.get_schema_summary(["marts"])
+            # Use configured schemas or auto-detect
+            default_schemas = os.environ.get("AGENT_SCHEMAS", "").split(",") if os.environ.get("AGENT_SCHEMAS") else None
+            self._schema_cache = self.warehouse.get_schema_summary(default_schemas)
         return self._schema_cache
 
     def _get_system_prompt(self) -> str:

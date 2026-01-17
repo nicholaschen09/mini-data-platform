@@ -56,7 +56,7 @@ def schema():
     """Show the warehouse schema."""
     show_banner()
     warehouse = get_default_warehouse()
-    console.print(Panel(warehouse.get_schema_summary(["raw", "staging", "marts"]), 
+    console.print(Panel(warehouse.get_schema_summary(), 
                         title="[bold]Database Schema[/bold]", 
                         border_style="medium_purple"))
     warehouse.close()

@@ -103,7 +103,7 @@ class Warehouse:
     def get_schema_summary(self, schemas: list[str] | None = None) -> str:
         """Generate a text summary of the schema for LLM context."""
         if schemas is None:
-            schemas = ["marts"]  # Default to marts for analysis
+            schemas = self.get_schemas()  # Auto-detect all available schemas
         
         lines = ["DATABASE SCHEMA:", ""]
         
