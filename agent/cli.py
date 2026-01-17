@@ -102,15 +102,21 @@ def sql(question: str):
 def run_repl():
     """Run the interactive REPL session."""
     show_banner()
-    console.print("[dim]Ask questions about your data. Press [bold]Ctrl+C[/bold] to quit.[/dim]")
-    console.print("[dim]Commands: [bold]schema[/bold] - view tables, [bold]exit[/bold] - quit[/dim]")
+    
+    console.print("[dim]Try asking:[/dim]")
+    console.print("  [medium_purple]•[/medium_purple] How much revenue did we make in 2024?")
+    console.print("  [medium_purple]•[/medium_purple] What are the top 5 products by sales?")
+    console.print("  [medium_purple]•[/medium_purple] Which customers have the highest lifetime value?")
+    console.print("  [medium_purple]•[/medium_purple] Show monthly revenue trends")
+    console.print()
+    console.print("[dim]Press [bold]Ctrl+C[/bold] to quit. Type [bold]schema[/bold] to view tables.[/dim]")
     console.print("─" * 60 + "\n")
     
     agent = Agent()
     
     while True:
         try:
-            question = console.input("[bold medium_purple]You >[/bold medium_purple] ")
+            question = console.input("[bold medium_purple]>[/bold medium_purple] ")
         except (EOFError, KeyboardInterrupt):
             console.print("\n[dim]Goodbye![/dim]")
             break
