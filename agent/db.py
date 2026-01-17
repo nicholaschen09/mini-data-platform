@@ -3,6 +3,7 @@
 import duckdb
 from pathlib import Path
 from dataclasses import dataclass
+from .constants import SYSTEM_SCHEMAS, DEFAULT_SAMPLE_LIMIT
 
 
 @dataclass
@@ -54,38 +55,47 @@ class Warehouse:
 
     def get_schemas(self) -> list[str]:
         """Get list of user schemas (excludes system schemas)."""
-        rows = self.execute("""
+        placeholders = ", ".join(["?" for _ in SYSTEM_SCHEMAS])
+        rows = self.conn.execute(f"""
             SELECT DISTINCT table_schema 
             FROM information_schema.tables 
-            WHERE table_schema NOT IN ('information_schema', 'pg_catalog')
+            WHERE table_schema NOT IN ({placeholders})
             ORDER BY table_schema
-        """)
+        """, SYSTEM_SCHEMAS).fetchall()
         return [r[0] for r in rows]
 
     def get_tables(self, schema: str | None = None) -> list[Table]:
         """Get tables with their columns. Optionally filter by schema."""
-        schema_filter = f"AND t.table_schema = '{schema}'" if schema else ""
+        placeholders = ", ".join(["?" for _ in SYSTEM_SCHEMAS])
         
-        # Get tables
-        tables_sql = f"""
-            SELECT t.table_schema, t.table_name
-            FROM information_schema.tables t
-            WHERE t.table_schema NOT IN ('information_schema', 'pg_catalog')
-            {schema_filter}
-            ORDER BY t.table_schema, t.table_name
-        """
-        table_rows = self.execute(tables_sql)
+        # Get tables with parameterized query
+        if schema:
+            tables_sql = f"""
+                SELECT t.table_schema, t.table_name
+                FROM information_schema.tables t
+                WHERE t.table_schema NOT IN ({placeholders})
+                AND t.table_schema = ?
+                ORDER BY t.table_schema, t.table_name
+            """
+            table_rows = self.conn.execute(tables_sql, (*SYSTEM_SCHEMAS, schema)).fetchall()
+        else:
+            tables_sql = f"""
+                SELECT t.table_schema, t.table_name
+                FROM information_schema.tables t
+                WHERE t.table_schema NOT IN ({placeholders})
+                ORDER BY t.table_schema, t.table_name
+            """
+            table_rows = self.conn.execute(tables_sql, SYSTEM_SCHEMAS).fetchall()
         
         tables = []
         for schema_name, table_name in table_rows:
-            # Get columns for this table
-            cols_sql = f"""
+            # Get columns for this table with parameterized query
+            col_rows = self.conn.execute("""
                 SELECT column_name, data_type
                 FROM information_schema.columns
-                WHERE table_schema = '{schema_name}' AND table_name = '{table_name}'
+                WHERE table_schema = ? AND table_name = ?
                 ORDER BY ordinal_position
-            """
-            col_rows = self.execute(cols_sql)
+            """, (schema_name, table_name)).fetchall()
             columns = [Column(name=c[0], dtype=c[1]) for c in col_rows]
             
             tables.append(Table(
@@ -96,7 +106,7 @@ class Warehouse:
         
         return tables
 
-    def get_table_sample(self, table: str, limit: int = 3) -> list[dict]:
+    def get_table_sample(self, table: str, limit: int = DEFAULT_SAMPLE_LIMIT) -> list[dict]:
         """Get sample rows from a table."""
         return self.execute_df(f"SELECT * FROM {table} LIMIT {limit}")
 

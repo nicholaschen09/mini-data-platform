@@ -7,44 +7,12 @@ from pathlib import Path
 from dotenv import load_dotenv
 from .db import Warehouse, get_default_warehouse
 from .llm import LLMProvider, get_llm_provider
+from .prompts import SYSTEM_PROMPT, FIX_SQL_PROMPT, SUMMARIZE_PROMPT, SUMMARIZE_SYSTEM
+from .constants import MAX_RETRIES, MAX_RESULTS_TO_SUMMARIZE
 
 # Load .env from project root
 _project_root = Path(__file__).parent.parent
 load_dotenv(_project_root / ".env")
-
-
-SYSTEM_PROMPT = """You are a data analyst assistant. You help users query a data warehouse by converting their questions into SQL.
-
-{schema}
-
-INSTRUCTIONS:
-1. Analyze the schema to understand what data is available
-2. Write a SQL query to answer the user's question
-3. Always qualify table names with schema (e.g., schema_name.table_name)
-4. Return ONLY the SQL query, no explanation, no markdown code blocks
-5. If you can't answer with the available data, say so
-
-TIPS:
-- Infer meaning from table and column names
-- Tables with "fact" or transaction data typically have metrics to aggregate
-- Tables with "dim" or entity data are usually for grouping/filtering
-- Use JOINs when combining data from multiple tables
-"""
-
-FIX_SQL_PROMPT = """The SQL query you generated failed with this error:
-
-Error: {error}
-
-{hint}
-
-Original question: {question}
-
-Failed SQL:
-```sql
-{sql}
-```
-
-Please fix the SQL query. Return ONLY the corrected SQL, no explanation."""
 
 
 def _get_error_hint(error: str) -> str:
@@ -68,7 +36,7 @@ def _get_error_hint(error: str) -> str:
 class Agent:
     """Text-to-SQL agent using configurable LLM provider."""
 
-    def __init__(self, warehouse: Warehouse | None = None, llm: LLMProvider | None = None, max_retries: int = 2):
+    def __init__(self, warehouse: Warehouse | None = None, llm: LLMProvider | None = None, max_retries: int = MAX_RETRIES):
         self.warehouse = warehouse or get_default_warehouse()
         self.llm = llm or get_llm_provider()
         self.max_retries = max_retries
@@ -163,19 +131,14 @@ class Agent:
             return f"Query executed but returned no results.\n\nSQL:\n```sql\n{result['sql']}\n```"
         
         # Ask LLM to summarize the results
-        summary_prompt = f"""The user asked: "{question}"
+        summary_prompt = SUMMARIZE_PROMPT.format(
+            question=question,
+            sql=result['sql'],
+            max_rows=MAX_RESULTS_TO_SUMMARIZE,
+            results=json.dumps(result['results'][:MAX_RESULTS_TO_SUMMARIZE], indent=2, default=str)
+        )
 
-I ran this SQL:
-```sql
-{result['sql']}
-```
-
-Results (showing up to 20 rows):
-{json.dumps(result['results'][:20], indent=2, default=str)}
-
-Please provide a clear, concise answer to the user's question based on these results. Include key numbers and insights. If the data shows interesting patterns, mention them."""
-
-        answer = self.llm.complete("You are a helpful data analyst.", summary_prompt)
+        answer = self.llm.complete(SUMMARIZE_SYSTEM, summary_prompt)
         
         # Include the SQL for transparency
         return f"{answer}\n\n---\n*SQL used:*\n```sql\n{result['sql']}\n```"

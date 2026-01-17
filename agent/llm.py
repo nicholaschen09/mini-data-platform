@@ -3,6 +3,7 @@
 import os
 import sys
 from abc import ABC, abstractmethod
+from .constants import MAX_LLM_TOKENS
 
 
 class LLMProvider(ABC):
@@ -34,7 +35,7 @@ class GroqProvider(LLMProvider):
                 {"role": "system", "content": system},
                 {"role": "user", "content": user}
             ],
-            max_tokens=1024
+            max_tokens=MAX_LLM_TOKENS
         )
         return response.choices[0].message.content.strip()
 
@@ -59,7 +60,7 @@ class OpenAIProvider(LLMProvider):
                 {"role": "system", "content": system},
                 {"role": "user", "content": user}
             ],
-            max_tokens=1024
+            max_tokens=MAX_LLM_TOKENS
         )
         return response.choices[0].message.content.strip()
 
@@ -80,7 +81,7 @@ class AnthropicProvider(LLMProvider):
     def complete(self, system: str, user: str) -> str:
         response = self.client.messages.create(
             model=self.model,
-            max_tokens=1024,
+            max_tokens=MAX_LLM_TOKENS,
             system=system,
             messages=[{"role": "user", "content": user}]
         )
