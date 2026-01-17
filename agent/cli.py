@@ -26,42 +26,24 @@ def show_banner():
     console.print("  [dim]Ad-hoc analytics powered by AI[/dim]\n")
 
 
-def show_loading(task_name: str = "Thinking"):
-    """Show a staggered multi-bar loading animation."""
+def show_loading():
+    """Show a simple horizontal loading bar."""
     import time
     import shutil
     
-    term_width = min(shutil.get_terminal_size().columns, 60)
-    num_bars = 8
+    bar_width = min(shutil.get_terminal_size().columns - 4, 50)
     bar_char = "━"
     
     # Hide cursor
     console.print("\033[?25l", end="")
     
     try:
-        for frame in range(term_width + 10):
-            lines = []
-            for i in range(num_bars):
-                # Stagger each bar
-                offset = i * 3
-                fill = max(0, min(frame - offset, term_width - 10))
-                bar = f"[medium_purple]{bar_char * fill}[/medium_purple]"
-                lines.append(bar)
-            
-            # Move cursor up and redraw
-            if frame > 0:
-                console.print(f"\033[{num_bars}A", end="")
-            
-            for line in lines:
-                console.print(line)
-            
+        for fill in range(bar_width + 1):
+            remaining = bar_width - fill
+            bar = f"[medium_purple]{bar_char * fill}[/medium_purple][dim]{bar_char * remaining}[/dim]"
+            console.print(f"\r{bar}", end="")
             time.sleep(0.02)
-        
-        # Clear the animation
-        console.print(f"\033[{num_bars}A", end="")
-        for _ in range(num_bars):
-            console.print(" " * term_width)
-        console.print(f"\033[{num_bars}A", end="")
+        console.print()  # newline after done
     finally:
         # Show cursor
         console.print("\033[?25h", end="")
@@ -100,7 +82,7 @@ def ask(question: str):
     console.print(f"[bold]Question:[/bold] {question}\n")
     
     agent = Agent()
-    show_loading("Analyzing")
+    show_loading()
     response = agent.chat(question)
     
     console.print(Panel(Markdown(response), title="[bold]Answer[/bold]", border_style="medium_purple"))
@@ -118,7 +100,7 @@ def sql(question: str):
     console.print(f"[bold]Question:[/bold] {question}\n")
     
     agent = Agent()
-    show_loading("Generating SQL")
+    show_loading()
     sql_query = agent.generate_sql(question)
     
     console.print(Panel(sql_query, title="[bold]Generated SQL[/bold]", border_style="medium_purple"))
@@ -155,7 +137,7 @@ def run_repl():
             console.print("[dim]Or just type a question about your data![/dim]")
             continue
         
-        show_loading("Analyzing")
+        show_loading()
         response = agent.chat(question)
         console.print()
         console.print(Panel(Markdown(response), title="[bold]Answer[/bold]", border_style="medium_purple"))
