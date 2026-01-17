@@ -2,113 +2,112 @@
 
 for this takehome i was tasked to build a CLI agent that can answer ad-hoc questions about a data warehouse using natural language.
 
-## quick start
-
-```bash
-# set up your api key (get one free at https://console.groq.com/keys)
-cp .env.example .env
-# edit .env and add your GROQ_API_KEY
-
-# run the agent
-uv run agent
-```
-
-the agent will start an interactive session where you can ask questions like:
-- "how much revenue did we make in 2024?"
-- "what are the top 5 products by sales?"
-- "which two products are most frequently bought together?"
-- "are there any anomalies with how we sell products?"
-
 ## my approach
 
-when i first received this project i took a look at the codebase structure - theres airflow dags for ingestion, dbt models for transformation, and a duckdb warehouse with the final data. i ran the setup script to get everything initialized and then poked around the warehouse to understand what data i was working with.
+when i first got the project i explored the codebase - airflow dags for ingestion, dbt models for transformations, and a duckdb warehouse with the final data. ran the setup script to populate everything and queried the warehouse to see what tables existed.
 
-after reading the instructions i noticed the key requirement was to keep the implementation generic enough to work with other data platforms. this meant i couldnt hardcode knowledge about this specific e-commerce dataset - the agent needed to discover the schema dynamically.
+the key requirement that stood out was keeping the implementation generic enough to plug into other data platforms. this meant i couldnt hardcode anything about this specific e-commerce dataset.
 
-### dynamic schema discovery
+### how it works
 
-i started by building out the database layer (`agent/db.py`). this handles connecting to duckdb and introspecting the schema using `information_schema`. the key method is `get_schema_summary()` which generates a text description of all tables and columns that gets passed to the llm:
+1. user asks a question in natural language
+2. agent fetches the database schema from `information_schema` at runtime
+3. schema gets injected into the llm prompt so it knows what tables/columns exist
+4. llm generates a sql query based on the discovered schema
+5. agent executes the sql against the database
+6. if the query fails, agent sends the error back to the llm to fix it (up to 2 retries)
+7. results get sent back to the llm to summarize in plain english
+8. user gets a natural language answer with the sql shown for transparency
 
-```python
-def get_schema_summary(self, schemas):
-    # queries information_schema.tables and columns
-    # returns human-readable schema for llm context
+### key design decisions
+
+**dynamic schema discovery** - the db layer (`agent/db.py`) queries `information_schema.tables` and `information_schema.columns` to build a text summary of all available data. no table names are hardcoded anywhere in the codebase. you can point this at a completely different database and the agent will adapt.
+
+**generic prompts** - the system prompt avoids mentioning specific tables. instead it gives general guidance like "infer meaning from column names" and "fact tables typically have metrics to aggregate, dim tables are for grouping". the llm figures out what `fct_orders` and `dim_customers` mean from context.
+
+**swappable llm providers** - created an abstract `LLMProvider` interface with implementations for groq (default), openai, and anthropic. switching providers is just changing an env var. groq is default because it has a free tier.
+
+**error self-correction** - llms sometimes generate bad sql. instead of failing immediately, the agent categorizes the error (missing column, bad table name, syntax error, type mismatch) and asks the llm to fix it with a specific hint. this makes complex queries much more reliable.
+
+**interactive repl** - instead of a one-shot command, the default mode is an interactive session where you can keep asking questions. took inspiration from claude code's interface - theres a banner, sample questions to get started, and a simple loading bar while waiting for responses. felt more natural for exploratory data analysis than running separate commands.
+
+### the code
+
+```
+agent/
+├── cli.py      # interactive repl with rich formatting
+├── agent.py    # text-to-sql pipeline with retry logic  
+├── db.py       # schema introspection via information_schema
+└── llm.py      # provider abstraction (groq/openai/anthropic)
+
+tests/
+└── test_agent.py   # 16 pytest tests
 ```
 
-this means if you swap out the duckdb warehouse for a different database, the agent will automatically discover the new schema and adapt its queries.
+## if i had more time
 
-### swappable llm providers
+there are several features i would add to make this more production-ready:
 
-i wanted to make it easy to swap between providers since the instructions said no particular requirements around model providers. ended up with a simple interface:
+**conversation memory** - right now each question is independent. with memory you could ask "how much revenue in 2024?" then follow up with "break that down by month" or "compare to 2023" without repeating context. would probably use a simple message history that gets included in the prompt.
 
-```python
-class LLMProvider(ABC):
-    def complete(self, system: str, user: str) -> str:
-        pass
-```
+**streaming responses** - for longer answers the user stares at a loading bar. streaming the llm output token-by-token would feel more responsive.
 
-with implementations for groq, openai, and anthropic. you just set `LLM_PROVIDER=groq` in your `.env` and it uses that one. groq is the default since it has a free tier.
+**export to csv/json** - let users save query results to files. useful for when they want to do further analysis in excel or another tool.
 
-### error handling with retry
+**better error messages** - when the llm cant figure out how to answer a question, give more helpful suggestions like "try asking about X instead" based on what data is actually available.
 
-the llm sometimes generates bad sql, especially for complex queries. instead of just failing i added retry logic that sends the error back to the llm and asks it to fix the query:
-
-```python
-def _fix_sql(self, question: str, sql: str, error: str) -> str:
-    hint = _get_error_hint(error)  # categorizes the error type
-    prompt = FIX_SQL_PROMPT.format(question=question, sql=sql, error=error, hint=hint)
-    fixed_sql = self.llm.complete(self._get_system_prompt(), prompt)
-    return self._clean_sql(fixed_sql)
-```
-
-i also added error categorization so the llm gets helpful hints like "check column names" or "use fully qualified table names" depending on what went wrong. this makes the self-correction much more effective.
-
-### the cli
-
-for the cli (`agent/cli.py`) i used click for the command structure and rich for the formatting. wanted it to look nice with a banner and loading animation. the default command starts an interactive repl where you can keep asking questions.
+**query history** - save past questions and answers so users can recall or re-run previous queries.
 
 ## testing
 
-i added pytest tests that cover:
+16 tests covering:
 - error hint generation (6 tests)
-- database operations like connecting and querying (5 tests)  
-- sql cleaning to remove markdown code blocks (3 tests)
-- end-to-end integration with the llm (2 tests)
+- database operations (5 tests)
+- sql cleaning (3 tests)
+- end-to-end with llm (2 tests)
 
-run tests with:
 ```bash
 uv run pytest tests/ -v
 ```
 
-## tools i used
+## steps to run
 
-i used cursor with claude opus 4.5 for most of the coding. it was especially helpful for the rich cli formatting and figuring out the error categorization logic. when i ran into issues with the loading animation not rendering correctly it helped me debug the escape codes.
-
-also used uv for package management - first time using it and its way faster than pip. `uv run agent` just works without messing with virtual environments.
-
-## if i had more time
-
-the main tradeoff i made was keeping everything simple and generic rather than adding specialized tools for complex queries. the instructions mentioned questions like "which products are bought together" (market basket analysis) and "are there anomalies" (anomaly detection) - i considered adding specialized sql templates for these but decided against it since that would make the agent less generic. the current approach relies on the llm being smart enough to figure out the right sql based on the schema.
-
-if i had more time id add:
-
-- **conversation memory** - so you can ask follow-up questions like "break that down by month" without restating context
-- **query caching** - to avoid regenerating sql for common questions
-- **streaming responses** - for better ux on longer answers
-- **export to csv/json** - let users save query results to files
-- **better visualization** - render charts in the terminal for numeric results
-
-## project structure
-
-```
-agent/
-├── cli.py      # interactive cli with rich formatting
-├── agent.py    # core agent logic (question → sql → answer)
-├── db.py       # database connection + schema introspection
-└── llm.py      # llm provider abstraction (groq/openai/anthropic)
-
-tests/
-└── test_agent.py   # pytest tests
+1. clone the repo and cd into it:
+```bash
+git clone <repo-url>
+cd mini-data-platform
 ```
 
-overall i think the design hits the right balance between functionality and simplicity. the architecture is clean, its easy to swap llm providers or databases, and the error handling makes it resilient to bad sql generation.
+2. run the setup script to populate the warehouse:
+```bash
+./setup.sh
+```
+
+3. create your `.env` file with an api key:
+```bash
+cp .env.example .env
+# edit .env and add: GROQ_API_KEY=gsk_your_key_here
+# get a free key at https://console.groq.com/keys
+```
+
+4. run the agent:
+```bash
+uv run agent
+```
+
+5. ask questions:
+```
+> how much revenue did we make in 2024?
+> what are the top 5 products by sales?
+> which customers have the highest lifetime value?
+```
+
+6. to run a single question without the repl:
+```bash
+uv run agent ask "how much revenue in 2024?"
+```
+
+7. to just see the generated sql without executing:
+```bash
+uv run agent sql "show monthly revenue trends"
+```
