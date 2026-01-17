@@ -43,10 +43,13 @@ def show_loading(task_name: str = "Thinking"):
             time.sleep(0.02)
 
 
-@click.group()
-def cli():
+@click.group(invoke_without_command=True)
+@click.pass_context
+def cli(ctx):
     """Data platform CLI agent for ad-hoc analysis."""
-    pass
+    if ctx.invoked_subcommand is None:
+        # No subcommand = run interactive mode
+        run_repl()
 
 
 @cli.command()
@@ -97,11 +100,11 @@ def sql(question: str):
     console.print(Panel(sql_query, title="[bold]Generated SQL[/bold]", border_style="yellow"))
 
 
-@cli.command()
-def repl():
-    """Start an interactive session."""
+def run_repl():
+    """Run the interactive REPL session."""
     show_banner()
-    console.print("[dim]Type your questions below. Commands: 'exit' to quit, 'schema' to see tables[/dim]")
+    console.print("[dim]Ask questions about your data. Press [bold]Ctrl+C[/bold] to quit.[/dim]")
+    console.print("[dim]Commands: [bold]schema[/bold] - view tables, [bold]exit[/bold] - quit[/dim]")
     console.print("─" * 60 + "\n")
     
     agent = Agent()
@@ -121,7 +124,11 @@ def repl():
             console.print("[dim]Goodbye![/dim]")
             break
         if question.lower() == "schema":
-            console.print(Panel(agent.schema_summary, title="[bold]Schema[/bold]", border_style="magenta"))
+            console.print(Panel(agent.schema_summary, title="[bold]Schema[/bold]", border_style="medium_purple"))
+            continue
+        if question.lower() == "help":
+            console.print("[dim]Commands: [bold]schema[/bold] - view tables, [bold]exit[/bold] - quit[/dim]")
+            console.print("[dim]Or just type a question about your data![/dim]")
             continue
         
         show_loading("Analyzing")
@@ -129,6 +136,12 @@ def repl():
         console.print()
         console.print(Panel(Markdown(response), title="[bold]Answer[/bold]", border_style="green"))
         console.print()
+
+
+@cli.command()
+def repl():
+    """Start an interactive session."""
+    run_repl()
 
 
 def main():
