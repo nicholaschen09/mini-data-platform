@@ -10,8 +10,14 @@ dependencies = [
     "dbt-duckdb>=1.10.0",
     "duckdb>=1.4.1",
     "groq>=0.11.0",
+    "python-dotenv>=1.0.0",
     "rich>=13.0.0",
 ]
+
+[project.optional-dependencies]
+openai = ["openai>=1.0.0"]
+anthropic = ["anthropic>=0.40.0"]
+all = ["openai>=1.0.0", "anthropic>=0.40.0"]
 
 [project.scripts]
 agent = "agent.cli:main"

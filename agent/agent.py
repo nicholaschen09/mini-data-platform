@@ -3,19 +3,14 @@
 import os
 import json
 import sys
-from groq import Groq
+from pathlib import Path
+from dotenv import load_dotenv
 from .db import Warehouse, get_default_warehouse
+from .llm import LLMProvider, get_llm_provider
 
-
-def _get_client() -> Groq:
-    """Get Groq client, checking for API key."""
-    api_key = os.environ.get("GROQ_API_KEY")
-    if not api_key:
-        print("Error: GROQ_API_KEY environment variable not set.", file=sys.stderr)
-        print("Set it with: export GROQ_API_KEY='your-key-here'", file=sys.stderr)
-        print("Get a free key at: https://console.groq.com/keys", file=sys.stderr)
-        sys.exit(1)
-    return Groq(api_key=api_key)
+# Load .env from project root
+_project_root = Path(__file__).parent.parent
+load_dotenv(_project_root / ".env")
 
 
 SYSTEM_PROMPT = """You are a data analyst assistant. You help users query a data warehouse by converting their questions into SQL.
@@ -39,12 +34,11 @@ TIPS:
 
 
 class Agent:
-    """Text-to-SQL agent using Groq."""
+    """Text-to-SQL agent using configurable LLM provider."""
 
-    def __init__(self, warehouse: Warehouse | None = None, model: str = "llama-3.3-70b-versatile"):
+    def __init__(self, warehouse: Warehouse | None = None, llm: LLMProvider | None = None):
         self.warehouse = warehouse or get_default_warehouse()
-        self.client = _get_client()
-        self.model = model
+        self.llm = llm or get_llm_provider()
         self._schema_cache: str | None = None
 
     @property
@@ -58,15 +52,7 @@ class Agent:
 
     def generate_sql(self, question: str) -> str:
         """Convert a natural language question to SQL."""
-        response = self.client.chat.completions.create(
-            model=self.model,
-            messages=[
-                {"role": "system", "content": self._get_system_prompt()},
-                {"role": "user", "content": question}
-            ],
-            max_tokens=1024
-        )
-        return response.choices[0].message.content.strip()
+        return self.llm.complete(self._get_system_prompt(), question)
 
     def query(self, question: str) -> dict:
         """Answer a question: generate SQL, execute, return results."""
@@ -107,7 +93,7 @@ class Agent:
         if not result["results"]:
             return f"Query executed but returned no results.\n\nSQL:\n```sql\n{result['sql']}\n```"
         
-        # Ask Groq to summarize the results
+        # Ask LLM to summarize the results
         summary_prompt = f"""The user asked: "{question}"
 
 I ran this SQL:
@@ -120,12 +106,7 @@ Results (showing up to 20 rows):
 
 Please provide a clear, concise answer to the user's question based on these results. Include key numbers and insights. If the data shows interesting patterns, mention them."""
 
-        response = self.client.chat.completions.create(
-            model=self.model,
-            messages=[{"role": "user", "content": summary_prompt}],
-            max_tokens=1024
-        )
-        answer = response.choices[0].message.content.strip()
+        answer = self.llm.complete("You are a helpful data analyst.", summary_prompt)
         
         # Include the SQL for transparency
         return f"{answer}\n\n---\n*SQL used:*\n```sql\n{result['sql']}\n```"
