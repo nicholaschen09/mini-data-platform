@@ -64,6 +64,10 @@ there are several features i would add to make this more production-ready:
 
 **query history** - save past questions and answers so users can recall or re-run previous queries.
 
+**tool calling** - some queries like market basket analysis or anomaly detection are hard to express in pure sql. adding specialized tools (e.g. `find_correlated_items`, `detect_outliers`) that the llm can invoke would handle these better than generating complex sql.
+
+**ontology/semantic layer** - define business concepts explicitly ("revenue" = `SUM(order_total)`, "active customer" = ordered in last 90 days) and table relationships in yaml. would give the llm richer context than raw schema alone.
+
 ## testing
 
 16 tests covering:
