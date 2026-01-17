@@ -1,5 +1,11 @@
 # solution
 
+
+
+https://github.com/user-attachments/assets/410e01a8-3dcb-4ee0-b195-399c1e2fd3e0
+
+
+
 for this takehome i was tasked to build a CLI agent that can answer ad-hoc questions about a data warehouse using natural language.
 
 ## my approach
