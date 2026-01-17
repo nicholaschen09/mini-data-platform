@@ -27,7 +27,7 @@ the key requirement that stood out was keeping the implementation generic enough
 
 ### key design decisions
 
-**dynamic schema discovery** - the db layer (`agent/db.py`) queries `information_schema.tables` and `information_schema.columns` to build a text summary of all available data. no table names are hardcoded anywhere in the codebase. you can point this at a completely different database and the agent will adapt.
+**dynamic schema discovery** - the db layer (`agent/db.py`) queries `information_schema.tables` and `information_schema.columns` using parameterized queries to build a text summary of all available data. no table names are hardcoded anywhere in the codebase. you can point this at a completely different database and the agent will adapt.
 
 **generic prompts** - the system prompt avoids mentioning specific tables. instead it gives general guidance like "infer meaning from column names" and "fact tables typically have metrics to aggregate, dim tables are for grouping". the llm figures out what `fct_orders` and `dim_customers` mean from context.
 
@@ -41,10 +41,12 @@ the key requirement that stood out was keeping the implementation generic enough
 
 ```
 agent/
-├── cli.py      # interactive repl with rich formatting
-├── agent.py    # text-to-sql pipeline with retry logic  
-├── db.py       # schema introspection via information_schema
-└── llm.py      # provider abstraction (groq/openai/anthropic)
+├── cli.py        # interactive repl with rich formatting
+├── agent.py      # text-to-sql pipeline with retry logic  
+├── db.py         # schema introspection via information_schema
+├── llm.py        # provider abstraction (groq/openai/anthropic)
+├── prompts.py    # all llm prompt templates
+└── constants.py  # configuration (retry limits, token limits, etc.)
 
 tests/
 └── test_agent.py   # 16 pytest tests
