@@ -31,7 +31,7 @@ the key requirement that stood out was keeping the implementation generic enough
 
 **interactive repl** - instead of a one-shot command, the default mode is an interactive session where you can keep asking questions. took inspiration from claude code's interface - theres a banner, sample questions to get started, and a simple loading bar while waiting for responses. felt more natural for exploratory data analysis than running separate commands.
 
-### the code
+### architecture
 
 ```
 agent/
