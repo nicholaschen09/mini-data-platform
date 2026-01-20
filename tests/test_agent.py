@@ -1,9 +1,8 @@
 """Tests for the data agent."""
 
 import pytest
-from unittest.mock import Mock, patch
-from agent.db import Warehouse, Column, Table
-from agent.agent import Agent, _get_error_hint
+from unittest.mock import patch
+from agent.agent import _get_error_hint
 
 
 class TestErrorHints:
