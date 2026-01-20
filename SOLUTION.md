@@ -12,7 +12,13 @@ for this takehome i was tasked to build a CLI agent that can answer ad-hoc quest
 
 when i first got the project i explored the codebase - airflow dags for ingestion, dbt models for transformations, and a duckdb warehouse with the final data. ran the setup script to populate everything and queried the warehouse to see what tables existed.
 
-the key requirement that stood out was keeping the implementation generic enough to plug into other data platforms. this meant i couldnt hardcode anything about this specific e-commerce dataset.
+the key requirement that stood out was keeping the implementation generic enough to plug into other data platforms. this meant i couldnt hardcode anything about this specific e-commerce dataset - no table names, no column names, no assumptions about what the data looks like.
+
+my first instinct was to build something simple: take a question, stuff the schema into a prompt, send it to an llm, run the sql. but i knew from experience that llms mess up sql constantly - wrong column names, bad joins, syntax errors. so i spent time thinking about how to make it robust.
+
+the solution i landed on was a feedback loop: if the sql fails, send the error message back to the llm and let it try again. but not just the raw error - i categorize it first ("this column doesn't exist", "type mismatch", etc.) and give the llm a hint about what went wrong. this made a huge difference in reliability.
+
+for the cli i wanted something that felt nice to use, not just a bare terminal. looked at how claude code does their interface and borrowed some ideas - a banner when you start, sample questions to inspire users, a loading indicator while waiting. small touches but they make it feel polished.
 
 ### how it works
 
